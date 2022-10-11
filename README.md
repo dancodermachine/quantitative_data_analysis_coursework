@@ -1,1 +1,3 @@
-# quantitative_data_analysis_coursework
+# Quantitative Data Analysis Coursework
+## Name: Daniel Alonso Villanueva Nunez
+## Grade:  **A***
