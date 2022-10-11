@@ -1,0 +1,1043 @@
+---
+title: "CS5801 Coursework Template Proforma"
+author: '2144810'
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    df_print: paged
+version: 1
+---
+
+# 0. Instructions 
+
+*1. Remove the (italicised) guidance text but keep the section headings.*  
+*2. Add as many chunks of R code as required.*  
+*3. Add descriptions of your analysis plans and explanations of your code and findings.  Please be detailed and where you have made choices explain the rationale for them.*  
+*4. Write your report using RMarkdown.  For guidance see a [helpful blog](https://www.dataquest.io/blog/r-markdown-guide-cheatsheet/#tve-jump-17333da0719) or use the R Markdown cheatsheet which can be accessed from within RStudio by selecting `Help > Cheatsheets > R Markdown Cheat Sheet`.*  
+*5. Your report should be clearly and professionally presented with appropriate use of cited external sources. (5 marks)*  
+*6. It should also be easy to understand, with well-documented code following the principles of literate programming. (5 marks)*  
+
+
+```{r}
+# Add code here to load any required libraries with `library()`.  
+# We suggest you use `install.package()` for any required packages externally to this document 
+# since installation only need be done once.
+library(corrplot)
+library(ggpubr)
+options(scipen = 999)
+```
+
+
+# 1. Organise and clean the data
+
+## 1.1 Subset the data into the specific dataset allocated
+ 
+*A description of the data set provided, its contents and which subset you should select is documented in the assessment brief at ???.pdf*  
+*Use R code to correctly select the subset of data allocated. (5 marks)*  
+
+```{r}
+# Assign your student id into the variable SID, for example:
+SID <- 2144810                  # This is an example, replace 2101234 with your actual ID
+SIDoffset <- (SID %% 25) + 1    # Your SID mod 25 + 1
+
+load("CS5801_football_analysis.Rda")
+# Now subset the football data set
+# Pick every 25th observation starting from your offset
+# Put into your data frame named mydf (you can rename it)
+mydf <- football.analysis[seq(from=SIDoffset,to=nrow(football.analysis),by=25),]
+write.csv(mydf, "data.csv")
+```
+## 1.2 Data quality analysis
+ 
+*Provide a description of a comprehensive plan to assess the quality of the data, and document your findings.  Include all variables/columns (5 marks) from the data set and provide a full implementation (5 marks).  NB even if no data quality issues are identified you should still check and report.*
+
+Here is my following plan to check the quality of the data for each column:
+
+1. `sofifa_id`: First, it must be checked if the column is a string. Then it must be checked if each value is unique since it is an ID. It must be checked if missing values (NA) exist.
+2. For columns `wage_eur`, `age`, `height_cm` and `weight_kg`, it must be checked that the columns are numerical. Then it must be checked that values are not below 0. It also must be checked for outliers and if they are reasonable or not. It must be checked if missing values (NA) exist.
+3. For columns `potential`, `pace`, `shooting`,`passing`, `dribbling`, `defending`, `physic`, `power_strength` and `power_long_shots`, it must be checked that the column is numerical. Then it must be checked that the maximum value is not above 100 and that the minimum value is not below 0. It must be checked if missing values (NA) exist.
+4. `club_name`: First, it must be checked that the column is a string. This column won't be used for analysis so not further studying will be done.  
+5. `preferred_foot`: First, it must be checked that the column is categorical (factor). This column must be constraint to two unique values: `Right` and `Left`. It exist the possibility that values like `left` or `LEft` could be encountered and if they do, they need to be changed to the 2 unique values. It must be checked if missing values (NA) exist.  
+6. `high.wage.ind`: First, it must be checked that the column is categorical (factor). This column must be constraint to two unique values: `1` and `0`. It must be checked if missing values (NA) exist. It also must be checked that it has a value of `1` if weekly wage is above 8000 and `0` otherwise. 
+
+**Note:**
+a) NA refers to Not Available.
+b) There are many methods for calculating outliers. However, for this lab, 3 will be used. The first is by using a boxplot. Where points are visualized, outliers exist. The second method is by using the standard deviation (std). Values that are beyond 3 stds from the mean are considered outliers. The final method is using interquartile range (IQR). Values that are beyond quartile 3 plus 1.5 times the IQR and values that are below quartile 1 minus 1.5 times the IQR are considered outliers.
+
+### Checking for quality issues:
+a) Checking data type of each column: 
+```{r}
+str(mydf)
+```
+* `power_long_shots`, `power_strength`, `physic`, `defending`, `dribbling`, `passing`, `shooting`, `pace` and `potential` have the right data type. They are integers (numerical).
+* `high.wage.ind` is integer (numerical) and therefore it needs to be changed to categorical (factor).
+* `preferred_foot` is a string (character) and needs to be changed to categorical (factor).
+* `sofifa_id` is a integer (numerical) and needs to be changed to string (character).
+* `wage_eur` is numerical therefore it is correct.
+* `age`, `height_cm`, `weight_kg` are integer (numerical) and therefore they are correct.
+* `club_name` is a string (character) and therefore it is correct.
+
+b) Checking for missing values (NA) for each column:
+```{r}
+# df_col_names is a list of all the column names of our dataframe.
+df_col_names <- c(colnames(mydf))
+# iteration over each column to find missing values.
+for (col_name in df_col_names){
+  message = paste("Column", col_name, "has", sum(is.na(mydf$col_name)), "missing values (NA)")
+  print(message)
+}
+```
+No missing values were found in any column.
+
+c) Check maximum and minimum values for numerical columns:
+```{r}
+summary(mydf)
+```
+* Column `wage_eur` has minimum value of 4 and maximum value of 300000. All values are positive. 4 euros for weekly salary is very low. Low values in this column need further investigation. Also, I need to look for outliers.
+* Column `age` has a minimum value of 16 and maximum value of 77. All values are positive. Now, I need to look for outliers.
+* Column `height_cm` has a minimum value of 160 and a max value of 220. All values are positive. Now, I need to look for outliers.
+* Column `weight_kg` has a minimum value of 56 and a maximum value of 188. All values are positive. Now, I need to look for outliers.
+* Column `potential` has a minimum value of 54 and has a maximum value of 89 . Values are between 0 and 100 so no changes are needed.
+* Column `pace` has a minimum value of -66 and has a maximum value of 94 . Values must be between 0 and 100. Therefore, changes are needed
+* Column `shooting` has a minimum value of 21 and has a maximum value of 83 . Values are between 0 and 100 so no changes are needed.
+* Column `passing` has a minimum value of 26 and has a maximum value of 90 . Values are between 0 and 100 so no changes are needed.
+* Column `dribbling` has a minimum value of -66 and has a maximum value of 92 . Values must be between 0 and 100. Therefore, changes are needed
+* Column `defending` has a minimum value of 18 and has a maximum value of 88 . Values are between 0 and 100 so no changes are needed.
+* Column `physic` has a minimum value of 35 and has a maximum value of 85 . Values are between 0 and 100 so no changes are needed.
+* Column `power_strength` has a minimum value of 29 and has a maximum value of 93 . Values are between 0 and 100 so no changes are needed.
+* Column `power_long_shots` has a minimum value of 16 and has a maximum value of 88 . Values are between 0 and 100 so no changes are needed.
+
+Checking for low values in the `wage_eur` column.
+```{r}
+mydf[mydf["wage_eur"]<500,]
+```
+- There is one player which weekly wage in euros is 4. This player belongs to a team in Japan (Cerezo Osaka). This is consider an error since the minimum weekly wage for someone in Japan is around 340 euros. [[1]](#references) 
+- Columns `pace` and `dribbling` need further investigation since their minimum value is -66.
+```{r}
+mydf[mydf["pace"] < 0,]
+```
+Column `pace` has one row which value is -66 which is below 0.
+```{r}
+mydf[mydf["dribbling"] < 0,]
+```
+Column `dribbling` has one row which value is -66 which is below 0.
+
+d) Looking for outliers in columns `wage_eur`, `age`, `height_cm` and `weight_kg`.
+
+Outliers using IQR method:
+```{r}
+c_col <- c("wage_eur", "age", "height_cm", "weight_kg")
+
+# Outliers using IQR
+for (col in c_col){
+  # calculating iqr method
+  iqr <- IQR(mydf[, col])
+  # calculatating q1 and q3
+  quant <- quantile(mydf[, col], c(0.25, 0.75))
+  # numbers below min limit will be considered outliers
+  min_limit <- quant[1] - 1.5*iqr
+  # numbers above max limit will be considered outliers
+  max_limit <- quant[2] + 1.5*iqr
+  print(mydf[mydf[col] > max_limit, ])
+  print(mydf[mydf[col] < min_limit, ])
+}
+```
+Outliers using Standard Deviation method:
+```{r}
+# Outliers using sd
+for (col in c_col){
+  sd_col <- 3*sd(mydf[, col])
+  mean_col <- mean(mydf[, col])
+  min_limit <- mean_col - sd_col
+  max_limit <- mean_col + sd_col
+  print(mydf[mydf[col] > max_limit, ])
+  print(mydf[mydf[col] < min_limit, ])
+}
+```
+* The first outlier found was a player which age is 77. This number I believe is incorrect because it is too old to be a football player at professional football. [[2]](#references)
+* The second outlier found was a player which height is 220cm. This number I believe is incorrect. [[3]](#references)  
+* The third outlier found was a player which weight is 188kg. This number is to high to be correct. [[4]](#references)
+
+e) Checking for duplicates on the `sofifa_id`
+```{r}
+# Check for duplicated values
+num_duplic = sum(duplicated(mydf$sofifa_id))
+message = paste("There are", num_duplic, "duplicated values")
+print(message) 
+mydf[duplicated(mydf$sofifa_id),]
+```
+There is 1 duplicated row on the `sofida_id` column.
+
+f) Checking for unique values on the `high.wage.ind` and `preferred_foot` columns.
+```{r}
+table(mydf$"high.wage.ind")
+```
+There are 365 values for "0" and 149 values for "1"  
+```{r}
+table(mydf$"preferred_foot")
+```
+Values must be constrained to 2 unique values: "Left", "Right", however, 1 "right" value was found and it must be changed. There are 121 values for "Left" and 392 values for "Right".
+
+g) Checking for binary value to be correct. It should be "1" if weekly wage is above 8000 and "0" otherwise.
+
+```{r}
+a <- mydf[mydf["wage_eur"] > 8000,]
+sum(mydf[mydf["wage_eur"] > 8000,]["high.wage.ind"])
+sum(mydf[mydf["wage_eur"] <= 8000,]["high.wage.ind"])
+```
+All values above 8000 are "1" and "0" otherwise. Not mistakes were found. 
+
+## 1.3 Data cleaning  
+ 
+*Explain any data quality issues found in 1.2 (5 marks), justify and document the responses made (if any) (5 marks).*
+
+Data quality issues found:
+
+1. `preferred_foot` column has 1 value which is "right", however, it should be "Right".
+
+2. `sofifa_id` column is int and it should be changed to string (char). `preferred_foot` column is a string (char) and should be changed to factor. `high.wage.ind`  is a string (char) and should be changed to factor.
+
+3. `pace` and `dribbling` columns both have 1 row which value is below 0. They need to be changed.
+
+4. The ideal weight for a football player is 48kg for the first 152cm and then 2.7kg for every extra 2.5cm. Therefore, if we have a player that has an altitude of 191cm, it is impossible that his weight is 188kg. Therefore this outlier is considered a mistake. [[4]](#references)
+
+5. The tallest football player according to FIFA has a height of 206cm. However, one football player whose height is 220cm was found. Therefore, this outlier will be considered as a mistake. [[3]](#references)
+
+6. `sofifa_id` has 1 duplicated value. Id values can't have duplicate values since it is an identifier of a person. 
+
+7. It was found that 1 player has an age of 77. The oldest football player in professional football has an age of 54. Therefore, this outlier is consider a mistake. [[2]](#references)
+
+8. There is one football player in a football club in Japan which weekly wage is 4 euros. This does not make sense since the minimum weekly salary in Japan is around 340 euros. This was not identified as an outlier, however this is considered a mistake aswell. [[1]](#references)  
+
+### Data Cleaning Implementation:
+```{r}
+df_clean <- data.frame(mydf)
+```
+
+
+1. Fixing the "right" value to "Right"
+```{r}
+df_clean[df_clean["preferred_foot"]=="right",]["preferred_foot"] <- "Right"
+table(df_clean$"preferred_foot")
+```
+
+2. Converting `sofifa_id`, `preferred_foot` and `high.wage.ind` to their factor data type. 
+```{r}
+df_clean$"sofifa_id" <- as.character(df_clean$"sofifa_id")
+df_clean$"preferred_foot" <- as.factor(df_clean$"preferred_foot")
+df_clean$"high.wage.ind" <- as.factor(df_clean$"high.wage.ind")
+str(df_clean)
+```
+Now, all data types are correct.
+
+We will try to use correlation to find the most suitable columns to be used in a regression model to fix the incorrect numbers.  
+```{r}
+num_col <- c("wage_eur",
+             "age",
+             "height_cm",
+             "weight_kg",
+             "potential",
+             "pace",
+             "shooting",
+             "passing",
+             "dribbling",
+             "defending",
+             "physic",
+             "power_strength",
+             "power_long_shots")
+
+df_cor <- subset(df_clean, select=num_col)
+df_cor <- df_cor[df_cor$"pace" > 0 & df_cor$"dribbling" > 0 & df_cor$"weight_kg" != 188 & df_cor$"height_cm" != 220, ]
+cor_matrix <- cor(df_cor)
+corrplot(cor_matrix, diag=F, type="upper", insig="p-value", number.digits=1, addCoef.col="black", tl.cex=0.7)
+```
+
+Since the `pace` value is not highly correlated with any value, the incorrect value will be replaced by the mean of the `pace` column.
+The column `dribbling` is highly correlated with the columns `passing` and `shooting`. Therefore, any of both values can be used to correct the negative values. The relation between `passing` and `dribbling` will be used to correct the negative values.
+
+3. Correcting the value -66 in the `pace` column with the mean. The mean value was calculated without the -66 value. Also, correcting the value -66 in the `dribbling` column using the `passing` column since it is the most correlated to it.
+
+```{r}
+mean_pace <- mean(df_clean[df_clean$"pace" != -66,]$"pace")
+df_clean[df_clean$"pace" == -66,]["pace"] <- mean_pace
+```
+Checking if changes in the `pace` column were made.
+```{r}
+df_clean[df_clean$"pace" < 0,]
+```
+The column `pace` now does not have negative values. 
+
+Since `dribbling` is highly correlated with `passing`, I will build a regression model with `dribbling` as my dependent variable and `passing` as my independent variable to fix the -66 value.  
+```{r}
+model_dribbling <- lm(dribbling~passing, data=df_clean)
+summary(model_dribbling)
+```
+61 is the number in the `passing` column where the error in the `dribbling` column is located. 
+```{r}
+passing_value <- as.data.frame(61)
+colnames(passing_value) <- c("passing")
+dribbling_value <- predict(model_dribbling, newdata=passing_value)
+dribbling_value
+```
+```{r}
+df_clean[df_clean$"dribbling" == -66,]["dribbling"] <- dribbling_value
+```
+```{r}
+df_clean[df_clean$"dribbling" < 0,]
+```
+Dribbling values below 0 have been fixed. 
+
+4. Since `weight_kg` is highly correlated with `height_cm`, I will build a regression model with `weight_kg` as my dependent variable and `height_cm` as my independent variable to fix the 188 value. 191cm is the height of the football player which weight is 188kg and that we consider a mistake. 
+```{r}
+# dataframe without the errors in the weight_kg column and the height_cm column
+df_model_heigh_weight <- df_clean[df_clean$"weight_kg" != 188 & df_clean$"height_cm" != 220, ]
+```
+```{r}
+# model with weight_kg as dependent variable
+model_weight_height <- lm(weight_kg~height_cm, data=df_model_heigh_weight)
+summary(model_weight_height)
+```
+```{r}
+height_value <- as.data.frame(191)
+colnames(height_value) <- c("height_cm")
+predicted_weight <- predict(model_weight_height, height_value)
+predicted_weight
+```
+```{r}
+df_clean[df_clean["weight_kg"] == 188, ]["weight_kg"] <- predicted_weight
+```
+The outlier on the `weight_kg` got fixed.
+
+5. Since `height_cm` is highly correlated with `weight_kg`, I will build a regression model with `height_cm` as my dependent variable and `weight_kg` as my independent variable to fix the 220 value. 61kg is the weight of the football player which height is 220cm and that we consider a mistake.
+```{r}
+model_height_weight <- lm(height_cm~weight_kg, data=df_model_heigh_weight)
+summary(model_height_weight)
+```
+```{r}
+weight_value <- as.data.frame(61)
+colnames(weight_value) <- c("weight_kg")
+predicted_height <- predict(model_height_weight, weight_value)
+predicted_height
+```
+```{r}
+df_clean[df_clean["height_cm"] == 220, ]["height_cm"] <- predicted_height
+```
+The outlier on the `height_cm` got fixed.
+
+6. Changing the duplicated id to any string that is unique in the column 
+```{r}
+df_clean[duplicated(df_clean$sofifa_id),]["sofifa_id"] <- "101096" 
+df_clean[duplicated(df_clean$sofifa_id),]
+```
+The duplicated value on the `sofifa_id` was modified to 101096. Why? it is a random number I picked. 
+
+7. Changing the age value to the second max value in the column
+```{r}
+df_clean[df_clean["age"]==77,]["age"] <- 38
+max(df_clean$"age")
+```
+We replaced the age of 77 by 38 because it is the max value after 77.
+
+8. Changing the wage value to its minimum value after 4.  
+```{r}
+df_clean[df_clean["wage_eur"]<500,]["wage_eur"] <- 500
+min(df_clean$"wage_eur")
+```
+
+```{r}
+df <- data.frame(df_clean)
+df
+```
+
+### List of modifications done: 
+
+1. The row which value on `preferred_foot` was "right" was changed to "Right". This was done because this column only admits 2 values: "Right" and "Left".
+2. `sofifa_id` column was converted to string data type. `preferred_foot` column was changed to factor data type. `high.wage.ind` column was converted to factor data type. Those changes were done because those columns are intended to be used in such way.  
+3. The column `pace` has 1 value below 0 which is -66. Column `pace` does not have any column which is highly correlated. Therefore, we calculated the mean of the column `pace` (without using the -66 value) and we change the -66 with the mean value. The column `dribbling` is highly correlated to `passing` (correlation of 0.8 without using the -66 value). Therefore, to fix the value, a linear regression model was built and used to predict the dribbling value.
+4. `weight_kg` is highly correlated to `height_cm` (correlation of 0.8 without using the outliers). Therefore a linear regression model was used to fix the outlier of 188 on the `weight_kg` column.  
+5. `height_cm` is highly correlated to `weight_kg` (correlation of 0.8 without using the outliers). Therefore a linear regression model was used to fix the outlier of 220 on the `height_cm` column.
+6. `sofifa_id` column had a duplicated value. An id is a unique value that identifies a player. This id could be modified to any value as long as it is not repeated. We used the value of "101096". It is an arbitrary number but I decided to use this one as it is random and is not used in the column.  
+7. The second max value of a player is 38. Therefore, the player which age is 77 was changed to 38.
+8. 500 is the minimum weekly wage after 4. This number was used to replace 4. 
+
+# 2. Exploratory Data Analysis (EDA)
+
+## 2.1 EDA plan
+
+*Outline a suitable plan to explore, describe and visualize your data. (5 marks)*
+
+### Univariate EDA planning:
+
+1. For columns `potential`, `wage_eur`, `age`, `height_cm`, `weight_kg`, `pace`, `shooting`, `passing`, `dribbling`, `defending`, `physic`, `power_strength`, `power_long_shots` columns, I will explore the maximum value, the minimum value, the range value, the standard deviation and the interquartile range (IQR). The mean value and median value will also be calculated. Furthermore, outliers will be identified by using boxplots. Histograms will be graphed to check if they follow a normall distribution or if they are skewed to any side. Furthermore, qqplot graphs and Shapiro tests will be done to check for normality.
+
+2. For columns which datatype is factor (`preferred_foot`, `high.wage.ind`), barplots and tables will be done.
+
+### Bivariate EDA planning:
+Since our research questions are regarding columns `potential` and `high.wage.ind`, I will do the following:
+
+1. Research question regarding column `potential`:
+
+    a) I will make the column `potential` as our dependent variable and we will create scatterplots against the following columns: `wage_eur`, `age`,   `height_cm`, `weight_kg`, `pace`, `shooting`, `passing`, `dribbling`, `defending`, `physic`, `power_strength`, `power_long_shots`. Furthermore, a correlation plot will be created to see insight of the correlation that exist between potential and the other columns and also look for collinearity. Then, correlation tests will be done. 
+    b) I will make `potential` as my dependent variable and perform ANOVA analysis with `preferred_foot` and `high.wage.ind` separately.   
+    
+
+2. Research question regarding column `high.wage.ind`:
+
+    a) I will create boxplots with `high.wage.ind` on the x-axis and columns `wage_eur`, `age`, `height_cm`, `weight_kg`, `pace`, `shooting`, `passing`, `dribbling`, `defending`, `physic`, `power_strength`, `power_long_shots` and  `potential` in the y-axis. The I will perform t-tests to see if the is significance difference or not between their means. 
+    b) I will perform a chi-squared test to see if there is a relationship between `high.wage.ind` and `preferred_foot`    
+
+## 2.2 EDA and summary of results  
+
+*Undertake and summaries the findings of your data exploration, particularly with respect to the research questions.  Use appropriate summary statistics (uni- and multi-variate) and visualizations. (10 marks)*
+
+### Univariate EDA
+
+```{r}
+# This function is used to calculate max, min, range, iqr, std, mean and medians of a single numerical column
+numeric_eda <- function(col){
+  
+  max_value = max(df[col])
+  min_value = min(df[col])
+  range_value = max_value - min_value
+  iqr_value = IQR(df[, col])
+  std_value = sd(df[, col])
+  mean_value = mean((df[, col]))
+  median_value = median(df[, col])
+  
+  max_message = paste("The max value of the column", col, "is", round(max_value,2))
+  min_message = paste("The min value of the column", col, "is", round(min_value,2))
+  range_message = paste("The range value of the column", col, "is", round(range_value,2))
+  iqr_message = paste("The column", col, "has an interquartile range of", round(iqr_value,2))
+  std_message = paste("The column", col, "has an standard deviation of", round(std_value,2))
+  mean_message = paste("The mean value of the column", col, "is", round(mean_value,2))
+  median_message = paste("The median value of the column", col, "is", round(median_value,2))
+  
+  print(max_message)
+  print(min_message)
+  print(range_message)
+  print(iqr_message)
+  print(std_message)
+  print(mean_message)
+  print(median_message)
+  print("--------------------------------------------------")
+}
+```
+```{r}
+numeric_columns <- c("potential",
+                     "wage_eur",
+                     "age",
+                     "height_cm",
+                     "weight_kg",
+                     "pace",
+                     "shooting",
+                     "passing",
+                     "dribbling",
+                     "defending",
+                     "physic",
+                     "power_strength",
+                     "power_long_shots")
+
+for (col in numeric_columns){
+  numeric_eda(col)
+}
+```
+
+Now we will plot histograms for each column:
+```{r}
+for (col in numeric_columns){
+  title = paste("Histogram of the column", col)
+  x_axis = paste("Values of the column", col)
+  hist(df[,col], main=title, xlab=x_axis)
+}
+```
+
+* `potential` column seems to follow a normal distribution.
+
+* `wage_eur` column seems to follow logarithmic distribution. [[5]](#references)
+
+* `age` column seems to be slightly skewed to the right. 
+
+* `height_cm` column seems to be to follow a normal distribution. 
+
+* `weight_kg` column seems to be slightly skewed to the right.
+
+* `pace` column seems to be skewed to the left. 
+
+* `shooting` column seems to be skewed to the left.
+
+* `passing` column seems to follow a normal distribution.
+
+* `dribbling` column seems to be slightly skewed to the left.
+
+* `defending` column seems to have 2 picks.
+
+* `physic` column seems to be skewed to the left.
+
+* `power_strength` column seems to be slightly skewed to the left.
+
+* `power_long_shots` column seems to be skewed to the left.
+
+Since the column `wage_eur` seems to follow a logarithmic distribution, I will use a log function to transform values so that it tryies to follow now a normal distribution. 
+```{r}
+df$wage_eur_log <- log(df$wage_eur)
+hist(df$wage_eur_log, main="Histogram of the column wage_eur_log", xlab="Values of the column wage_eur_log")
+```
+
+* `wage_eur_log` seems to be skewed to the right.
+
+
+```{r}
+numeric_columns <- c("potential",
+                     "wage_eur_log",
+                     "age",
+                     "height_cm",
+                     "weight_kg",
+                     "pace",
+                     "shooting",
+                     "passing",
+                     "dribbling",
+                     "defending",
+                     "physic",
+                     "power_strength",
+                     "power_long_shots")
+
+for (col in numeric_columns){
+  title = paste("Normal Q-Q Plot of the column", col)
+  qqnorm(df[,col], main=title)
+  qqline(df[,col], col="steelblue", lwd=2)
+}
+```
+```{r}
+for (col in numeric_columns){
+  message = paste("Shapiro-Wilk normality test for the column", col)
+  print(message)
+  shapiro_test <- shapiro.test(df[,col])
+  print(shapiro_test[2])
+  if (shapiro_test[2] < 0.05){
+    shap_message <- paste("This is a very small p-value, we reject the null hypothesis that", col, "in this sample is normally distributed")
+    print(shap_message)
+  }
+  else{
+    print(paste("We failed to reject the null hypothesis. Column", col, "is normally distributed"))
+  }
+  cat("-------------------------------------------------------------------------------------------\n\n\n")
+}
+```
+After graphing the qq-plots and peforming shapiro tests, we can conclude the following:
+
+* Columns `power_long_shots`, `power_strength`, `physic`, `physic`, `defending`, `dribbling`, `shooting`, `pace`, `weight_kg`, `age`, `wage_eur_log`, `potential` are not normally distributed.
+
+* Columns `passing`, `height_cm` are normally distributed. 
+
+Boxplots:
+```{r}
+for (col in numeric_columns){
+  title = paste("Boxplot for column", col)
+  y_axis = paste("Values of column", col)
+  boxplot(df[, col], main=title, ylab=y_axis)
+}
+```
+
+* Even though the boxplots show that some columns do have outliers, those outliers do not represent any trouble when modeling as they seem to land on the range of normal values given by FIFA. 
+
+Now, we need to explored the categorical columns. First, wee need to create tables. 
+```{r}
+table_foot <- table(df$preferred_foot)
+print(table_foot)
+table_wage <- table(df$high.wage.ind)
+print(table_wage)
+```
+Now, we will create barplots
+```{r}
+barplot(table_foot,
+        names.arg=rownames(table_foot),
+        ylab="Number of players",
+        main="Countplot of preferreded foot for players")
+```
+```{r}
+barplot(table_wage,
+        names.arg=rownames(table_wage),
+        ylab="Number of players",
+        main="Countplot of weekly wages above 8000 euros")
+```
+
+* It is clearly shown that both categorical columns are not balanced. 
+
+### Bivariate EDA
+**Regarding column `potential`**
+```{r}
+numeric_columns <- c("wage_eur_log",
+                     "age",
+                     "height_cm",
+                     "weight_kg",
+                     "pace",
+                     "shooting",
+                     "passing",
+                     "dribbling",
+                     "defending",
+                     "physic",
+                     "power_strength",
+                     "power_long_shots")
+
+for (col in numeric_columns){
+  title = paste("Relationship between player's potential and", col)
+  x_axis = col
+  y_axis = "Player's potential"
+  plot(df[,col],
+       df[,"potential"],
+       pch=16,
+       cex=1.3,
+       col="blue",
+       ylab=y_axis,
+       xlab=x_axis,
+       main=title)
+  
+  abline(lm(df[,"potential"]~df[,col]),
+         lwd=2,
+         col="red")
+}
+```
+
+* `potential` seems to have a positive correlation with `wage_eur_log`.
+
+* `potential` seems to have a quadratic relationship with `age`. 
+
+* `potential` seems to have no correlation with `height_cm`.
+
+* `potential` seems to have no correlation with `weight_cm`.
+
+* `potential` seems to have positive correlation with `pace`.
+
+* `potential` seems to have positive correlation with `shooting`.
+
+* `potential` seems to have positive correlation with `passing`.
+
+* `potential` seems to have positive correlation with `dribbling`.
+
+* `potential` seems to hava a quadratic relationship with `defending`.
+
+* `potential` seems to have no correlation with `physic`.
+
+* `potential` seems to have no correlation with `power_strength`.
+
+* `potential` seems to have positive correlation with `power_long_shots`.
+
+Making correlation tests:
+```{r}
+for (col in numeric_columns){
+  cor_test <- cor.test(df[,col], df[,"potential"], method="spearman", exact=FALSE)
+  p_value <- cor_test[3]
+  corr_value <- cor_test[4]
+  print(p_value)
+  if (p_value < 0.05){
+    message <- paste("Since, we have a small p-value, we reject the null hypothesis and we say there is a relationship between player's potential and", col, ". The correlation between the 2 variables is", corr_value)
+    print(message)
+  } else{
+    message <- paste("p-value is not small. We failed to reject the null hypothesis. There is no relationship between player's potential and", col)
+    print(message)
+  }
+  cat("---------------------------------------------------------------------\n\n")
+} 
+
+```
+Analyzing relationship between `potential` and `preferred_foot`. 
+```{r}
+#Anova
+boxplot(potential~preferred_foot,
+        data=df,
+        notch=TRUE,
+        main="Boxplot of player's potential comparing left foot and right foot")
+summary(aov(df$potential~df$preferred_foot))
+```
+
+* The boxplot shows that there is not statistical significance in the difference of medians. The ANOVA test shows that there is not statistical significance in the difference of means.
+
+Analyzing relationship between `potential` and `high.wage.ind`.
+```{r}
+#Anova
+boxplot(potential~high.wage.ind,
+        data=df,
+        notch=TRUE,
+        main="Boxplot of player's potential comparing left foot and right foot")
+summary(aov(df$potential~df$high.wage.ind))
+```
+The boxplot shows that there is statistical significance in the difference of medians. The ANOVA test shows that there is statistical significance in the difference of means.
+
+Finding correlations to find issues of collinearity.
+```{r}
+c_col <- c("wage_eur_log",
+           "age",
+           "height_cm",
+           "weight_kg",
+           "potential",
+           "pace",
+           "shooting",
+           "passing",
+           "dribbling",
+           "defending",
+           "physic",
+           "power_strength",
+           "power_long_shots")
+
+df_cor <- subset(df, select=c_col)
+cor_matrix <- cor(df_cor, method="spearman")
+corrplot(cor_matrix, diag=F, type="upper", insig="p-value", number.digits=1, addCoef.col="black", tl.cex=0.7)
+```
+
+* Issues of collinearity could be found between `physic` and `power_strength`, between `dribbling` and both `shooting` and `passing`, between `power_long_shoots` and `shooting` and between `height_cm` and `weight_kg`.   
+
+**Regarding column `high.wage.ind`**
+```{r}
+c_col <- c("wage_eur_log",
+           "age",
+           "height_cm",
+           "weight_kg",
+           "potential",
+           "pace",
+           "shooting",
+           "passing",
+           "dribbling",
+           "defending",
+           "physic",
+           "power_strength",
+           "power_long_shots")
+
+for (col in c_col){
+  title = paste("Boxplot comparing values on", col, "between players with weekly wages below 8000 and above 8000")
+  x_axis = "Weekly wage above 8000? 1=Yes, 0=No"
+  y_axis = col
+  boxplot(df[,col]~df[,"high.wage.ind"],
+          data=df,
+          notch=TRUE,
+          main=title,
+          xlab=x_axis,
+          ylab=y_axis)
+}
+```
+
+* Boxplots show that there is statistical significance in the difference of medians between `high.wage.ind` and the following columns:  `wage_eur_log` (more than obvious since `high.wage.ind` is calculated from `wage_eur`), `age` (small), `height_cm` (barely), `potential`, `shooting`, `passing`, `dribbling`, `defending`, `physic`, `power_strength` and `power_long_shots`. Boxplots show that there is no statistical significance in the difference in medians between `high.wage.ind` and the following columns: `weight_kg` and `pace`.
+
+Performing two sided t-test to find if there is significance difference in means between `high.wage.ind` and the other numerical columns.  
+
+```{r}
+for (col in c_col){
+  message <- paste("Results for column", col)
+  print(message)
+  ttest_result <- t.test(df[,col]~df[,"high.wage.ind"], alternative="two.sided")
+  print(ttest_result[5])
+  print(ttest_result[3])
+  if (ttest_result[3]<0.05){
+    message_1 <- "P-value is very small, we reject null-hypothesis and we say there is statistical significance in the difference of means."
+    print(message_1)
+  }
+  else {
+    message_2 <- "P-value is big. We failed to reject the null-hypotheis. There is no evidence that there is statistical significance in the diffence of means."
+    print(message_2)
+  }
+  cat("----------------------------------------------------------------------------------------------------------------\n\n\n")
+}
+```
+Columns `wage_eur_log`, `age`, `height_cm`, `weight_cm`, `potential`, `shooting`, `passing`, `dribbling`, `defending`, `physic`, `power_strength` and `power_long_shots` have shown to have statistical significance in their difference of means between players that have weekly payments less than 8000 and above 8000. Column `pace` has shows to not have statistical significance in the difference of means. 
+
+Looking for a relationship between `preferred_foot` and `high.wage.ind`:
+```{r}
+table_wage_foot <- table(df$high.wage.ind, df$preferred_foot)
+table_wage_foot
+```
+```{r}
+chisq.test(table_wage_foot)
+```
+P-value is 0.9226, therefore failed to reject the null hypothesis and we say there is no relationship between `preferred_foot` and `high.wage.ind`.
+
+## 2.3 Additional insights and issues
+
+*Highlight potential further issues or insights uncovered in 2.2.  This might include follow up to findings from your initial EDA.  We accept that the boundary between 2.2 and 2.3 is somewhat arbitrary so use your judgement and maximize good structure and readability. (5 marks)*
+
+No further issues where found during the EDA, all issues were found and fixed during the data cleaning. 
+
+# 3. Modelling
+
+## 3.1 Build a model for player potential
+
+*Given the research question (i.e., player potential) outline an analysis plan that incorporates/references any findings from the data cleaning (1.3) and EDA (2.2)  (5 marks). Use R to build a suitable model (10 marks).*  
+*NB Submissions where suitable models do not have good fit due to the nature of the data will not be penalized.*
+
+* From the EDA process, I have found that column `wage_eur` follows a logarithmic distribution. Therefore, a logarithmic transformation was applied to make the column more suitable for usage in the model. The transformation was stored in the `wage_eur_log` column. [[6]](#references)
+
+* From the EDA process, I have found that columns `power_long_shots`, `power_strength`, `physic`, `defending`, `dribbling`, `shooting`, `pace`, `weight_kg`, `wage_eur_log`, `age`, `potential` do not follow a normal distribution. Only columns `height_cm`, and `passing` follow a normal distribution. Therefore, when trying to find correlation between the columns, the Spearman method was used. 
+
+* In order to avoid collinearity, features that are highly correlated (>=0.8) between each other, will not be used. `height_cm` and `weight_kg` are highly correlated, for this case `height_cm` will be used because it follows a normal distribution. `dribbling` is highly correlated with `shooting` and `passing`, for this case we will use `dibbling` and remove `shooting` and `passing` in the model. In this way, we use one feature instead of two and make the model simplier, and also because dribbling has more correlation with `potential` than the other 2 features. `physic` and `power_strength` are also highly correlated, I will use `physic` and not use `power_strength` because `physic` has a higher correlation with `potential` than `power_strength` with `potential`. In summary, columns `weight_kg`, `shooting`, `passing`, `power_strenght` will not be used in the model. 
+
+* Using ANOVA and boxplots with notches, we have found that there is not statistical significance in median and mean of player's potential between players who preferred right foot and left foot. Therefore, the column `preferred_foot` will not be used in the model. On the other hand, it was found that there was a statistical signficance in median and mean of player's potential between players whose weekly wages are above 8000 euros and those below 8000 euros. However, the column `high.wage.ind` is taken from the `wage_eur` column which does not bring extra information, it only confirms that `wage_eur_log` is a good feature for our model. If `high.wage.ind` is used, an interaction problem with `wage_eur_log` will surged. 
+
+* `age` and `defending` may have a quadratic relationships on potential as seen as on the linear regressions performed on the EDA. 
+
+* First I will build a complex model and take note of the significant coefficients. Then I will build a very simple model and start adding significant coefficients found in the complex model. 
+
+**model0**
+
+```{r}
+mr_model0 <- lm(potential ~ wage_eur_log*age*height_cm*pace*dribbling*defending*physic*power_long_shots +
+                            I(wage_eur_log^2)+
+                            I(age^2) + 
+                            I(height_cm^2) + 
+                            I(pace^2) +
+                            I(dribbling^2) +
+                            I(defending^2) +
+                            I(physic^2) + 
+                            I(power_long_shots^2), data=df)
+summary(mr_model0)
+```
+
+Coefficients `I(wage_eur_log^2)`, `I(age^2)`, `I(defending^2)`, `dribbling:power_long_shots` are significant here. There are other significant coefficients as well but they will not be used because it makes the model too complex (e.g. `wage_eur_log:dribbling:power_long_shots`)
+
+**model1**
+
+Starting with a very simple model:
+```{r}
+mr_model1 <- lm(potential ~ wage_eur_log +
+                            age + 
+                            height_cm + 
+                            pace + 
+                            dribbling + 
+                            defending + 
+                            physic + 
+                            power_long_shots, data=df)
+summary(mr_model1)
+```
+**model2**
+
+`power_long_shots` has the least significant coefficient. It will be removed.
+
+```{r}
+mr_model2 <- update(mr_model1,~.-power_long_shots)
+summary(mr_model2)
+```
+**model3**
+
+`pace` has the least significant coefficient. It will be removed.
+
+```{r}
+mr_model3 <- update(mr_model2,~.-pace)
+summary(mr_model3)
+```
+**model4**
+
+`I(wage_eur_log^2)` will be added since it has been shown in the complex model that it posses a significant coefficient.
+
+```{r}
+mr_model4 <- update(mr_model3,~.+I(wage_eur_log^2))
+summary(mr_model4)
+```
+**model5**
+
+`I(age^2)` will be added since it has been shown in the complex model that it posses a significant coefficient. 
+
+```{r}
+mr_model5 <- update(mr_model4,~.+I(age^2))
+summary(mr_model5)
+```
+**model6**
+
+`I(defending^2)` will be added since it has been shown in the complex model that it posses a significant coefficient. 
+
+```{r}
+mr_model6 <- update(mr_model5,~.+I(defending^2))
+summary(mr_model6)
+```
+**model7**
+
+`dribbling:power_long_shots` will be added since it has been shown in the complex model that it posses a significant coefficient.
+
+```{r}
+mr_model7 <- update(mr_model6,~. + dribbling:power_long_shots)
+summary(mr_model7)
+```
+
+Model 7 shows that `dribbling:power_long_shots` is not significant so we will keep **model6** as our final model.
+
+Analyzing model6: 
+```{r}
+plot(mr_model6)
+```
+
+In the graph "Residuals vs Fitted", residuals are randomly distributed which means that there are not signs of heteroscedasticity. The Normal Q-Q plot shows that the standardized residuals do follow a normal distribution which means our model is good. 
+
+## 3.2 Critique model using relevant diagnostics
+
+*Offer an interpretation of the model characteristics, goodness of fit and graphical diagnostics (5 marks) for the model built in 3.1. Explain any potential weaknesses (5 marks).*
+
+
+* First, I built a very complex model (model0) using the variables `wage_eur_log`, `age`, `height_cm`, `pace`, `dribbling`, `defending`, `physic`, `power_long_shots`, their quadratic values and their interactions between them. They were used since they have been shown to be relevant during the EDA. The output of the model was an R-squared of 0.9422 but a very low F-statistic of 15.61. However, I found that coefficients for `I(wage_eur_log^2)`, `I(age^2)`, `I(defending^2)`, `dribbling:power_long_shots` are significant. Others were too but we ignore them since adding them would make the model very complex. 
+
+* Second, I built a very simple model (model1) using the variables `wage_eur_log`, `age`, `height_cm`, `pace`, `dribbling`, `defending`, `physic`, `power_long_shots`. We found that `pace` and `power_long_shots` were the least significant. This model gave us a lower R-squared of 0.6741 but a significant higher F-statistic of 130.6 (improvement of 114.99).
+
+* Third, I built a model (model2) by removing the `power_long_shots` column from model1  since it was no significant in model1. The R-squared slightly decreased to 0.6739 but the F-statistic increased to 149.4. Column `pace` remain to be not significant.
+
+* Fourth, I built a model (model3) by removing the `pace` column from model2 since it was no significant in model2. The R-squared slightly increased from model2 to 0.6718 but still lower than model1 (0.6741). The F-statistic increased to 172.9.
+
+* Fifth, I built a model (model4) by adding `I(wage_eur_log^2)` to model3. The R-squared increased to 0.7034 (the highest so far) and the F-statistic slightly decreased to 171.4.
+
+* Sixth, I built a model (model5) by adding `I(age^2)` to model4. The R-squared increased to 0.7772 (the highest so far) and the F-statistic had a big increased to 220.2 (highest so far).
+
+* Seventh, I built a model (model6) by adding `I(defending^2)` to model5. The R-squared slightly increased to 0.7879 (highest so far). However, the F-statistic decreased to 208.1.  
+
+* Finally, I built a model (model7) by adding `dribbling:power_long_shots` to model6. However, this column resulted to be no significant. Not only that, it led to a significant decrease in both R-squared and F-statistic.
+
+* Therefore our final model will be model6 which had the highest R-squared and the second highest F-statistic from all my models. Furthermore, the graph "Residuals vs Fitted" shows that residuals are randomly distributed which means that there are not signs of heteroscedasticity and the Normal Q-Q plot shows that the standardized residuals do follow a normal distribution which means our model is good. 
+
+* Our final model is interpreted as follows:
+
+$$potential=114.1618122 - 3.6916435 \times log(wage\_eur) - 4.9081759 \times age + 0.0636173 \times height\_cm + 0.3124827 \times dribbling - 0.2199382 \times defending + 0.1647190 \times physic + 0.3073120 \times log(wage\_eur)^2 + 0.0776776 \times age^2 +  0.0029532 \times defending^2 $$
+
+* The multi-regression coefficients gives you the size of effect that the feature is having on potential and the sign gives you whether that effect is positive or negative (e.g., for every unit increase in age there is 4.9 decrease in potential). 
+
+## 3.3 Suggest improvements to your model
+
+*Based on the findings in 3.2 articulates possible alternative approaches to address them (5 marks).*
+
+Since Multiple Regression is an algorithm that uses distance between points for the loss function, variables which range are higher (e.g., `wage_eur_log` range is significantly smaller than the range in `height_cm`) will have a bigger impact in the model without being necessary more important than the other variables. A good way to fix this is to standardize numerical columns. In that way, your columns will follow a normal distribution and have a mean of 0 and a standard deviation of 1. In other words, they will have similar scale and will help the algorithm remove that bias. 
+
+
+# 4. Extension work
+
+## 4.1 Model the likelihood of a player having a weekly wage above 8000 Euro (using the high.wage.ind variable provided).
+
+*Given this second research question (i.e., involving the binary target attribute) provide a plan of analysis based on relevant EDA for this attribute (10 marks). The model is described, explained and critiqued (10 marks).*
+*NB Submissions where suitable models do not have good fit due to the nature of the data will not be penalized.*
+
+Plan:
+
+* Column `wage_eur_log` will not be used in the model because `high.wage.ind` is calculated from `wage_eur`. Therefore, when building the model, `wage_eur_log` will perfectly separate 1 and 0s and will lead the model to not converge. [[7]](#references)  
+
+* From the EDA process, I have found that columns `power_long_shots`, `power_strength`, `physic`, `defending`, `dribbling`, `shooting`, `pace`, `weight_kg`, `wage_eur_log`, `age`, `potential` do not follow a normal distribution. Only columns `height_cm`, and `passing` follow a normal distribution.
+
+* In order to avoid collinearity, features that are highly correlated (>=0.8) between each other, will not be used. `height_cm` and `weight_kg` are highly correlated, for this case `height_cm` will be used because it follows a normal distribution. `dribbling` is highly correlated with `shooting` and `passing`, for this case we will use `dibbling` and remove `shooting` and `passing` in the model. In this way, we use one feature instead of two and make the model simplier, and also because dribbling has more correlation with `potential` than the other 2 features. `physic` and `power_strength` are also highly correlated, I will use `physic` and not use `power_strength` because `physic` has a higher correlation with `potential` than `power_strength` with `potential`. In summary, columns `weight_kg`, `shooting`, `passing`, `power_strenght` will not be used in the model. 
+
+* `Pace` has been shown to not have statistical significance in the difference in means between `high.wage_ind` = 0 and `high.wage_ind` = 1. I will not use this column in the model.  
+
+* `weight_kg` and `pace` have been shown to not have statistical significance in the difference in medians between `high.wage_ind` = 0 and `high.wage_ind` = 1. We don't need to worry since we already said `weight_kg` will not be used to avoid collinearity and we already say we need to be careful with the `pace` column.
+
+* First I will build a complex model and take note of the significant coefficients. Then I will build a very simple model and start adding significant coefficients found in the complex model. 
+
+
+**model0**
+
+```{r}
+lg_model0 <- glm(high.wage.ind ~ age*height_cm*dribbling*defending*physic*power_long_shots +
+                                 I(age^2) + 
+                                 I(height_cm^2) + 
+                                 I(dribbling^2) +
+                                 I(defending^2) +
+                                 I(physic^2) + 
+                                 I(power_long_shots^2) +
+                                 I(potential^2), data=df, family=binomial)
+summary(lg_model0)
+```
+
+Columns `I(age^2)`, `I(defending^2)`, `I(potential^2)` were found to be significant. 
+
+**model1**
+
+Simple model is built. 
+```{r}
+lg_model1 <- glm(high.wage.ind ~ age + 
+                                 height_cm +
+                                 dribbling + 
+                                 defending + 
+                                 physic + 
+                                 power_long_shots +
+                                 potential, data=df, family=binomial)
+summary(lg_model1)
+```
+**model2**
+
+Now I will add the significant coefficients found on model0 to model2 which are `I(age^2)`, `I(defending^2)`, and `I(potential^2)`.
+
+```{r}
+lg_model2 <- glm(high.wage.ind ~ age + 
+                                 height_cm +
+                                 dribbling + 
+                                 defending + 
+                                 physic + 
+                                 power_long_shots +
+                                 potential +
+                                 I(age^2) + 
+                                 I(defending^2) +
+                                 I(potential^2), data=df, family=binomial)
+summary(lg_model2)
+```
+**model3**
+
+`physic` column is not a significant coefficient so it will be removed from model2. 
+
+```{r}
+lg_model3 <- update(lg_model2,~.-physic)
+  
+summary(lg_model3)
+```
+**model4**
+
+`height_cm` column is not a significant coefficient so it will be removed from model3.
+
+```{r}
+lg_model4 <- update(lg_model3,~.-height_cm)
+  
+summary(lg_model4)
+```  
+**model5**
+
+`I(potential^2)` has been shown to have low significance. Therefore it will be removed from model 4. 
+```{r}
+lg_model5 <- update(lg_model4,~.-I(potential^2))
+  
+summary(lg_model5)
+``` 
+
+**Description, explanation and critique of the model:**
+
+* First, I built a complex model with the features that were found important for `high.wage.ind` during the EDA with their quadratic relationship and interactions between them. `I(age^2)`, `I(defending^2)`, `I(potential^2)` were found to be significant. The AIC score of model0 is 316.95
+
+* Second, I built a very simple model (model1). The column `physic` was no significant and column `power_long_shots` had very small significance. The AIC score decrease to 294.6 (lowest so far).
+
+* Third, I added the significant coefficients found in model0 which were `I(age^2)`, `I(defending^2)`, and `I(potential^2)` to model1 to build model2. The AIC score decrease to 262.12 (lowest so far). 
+
+* Fourth, for model3, I removed column `physic` from model2 because it was not significant. The AIC score slightly decreased to 262.06 (lowest so far).
+
+* Fifth, for model4, I removed column `height_cm` from model3 because it was not significant. The AIC score slightly decreased to 261.3 (lowest so far). 
+
+* Finally, for model5, I removed `I(potential^2)` from model4 because it had very low significance. However, the AIC score slightly increased to 262.36.
+
+* Since model4 is the model which has the smallest AIC score, then this will be our model I will use.
+
+* The model can be interpreted as follows:
+
+
+$$log(\frac{p}{1-p})= -138.8253817 + 2.3847270 \times age + 0.0656418 \times dribbling - 0.2202835 \times defending + 0.0379794 \times power\_long\_shots +  2.2971500 \times potential - 0.0389509 \times age^2 + 0.0024510 \times defending^2 - 0.0125484 \times potential^2    $$
+
+* The logistic regression coefficients give the change in the log odds of the outome for a one unit increase in the explanatory variable (e.g., for every unit change for age the log odds of making having a weekly wage above 8000  increases by 2.38). 
+
+* To improve the model, same concept for multi-regression applies. Since Logistic Regression is an algorithm that uses distance between points for the loss function, variables which range are higher (e.g., `wage_eur_log` range is significantly smaller than the range in `height_cm`) will have a bigger impact in the model without being necessary more important than the other variables. A good way to fix this is to standardize numerical columns. In that way, your columns will follow a normal distribution and have a mean of 0 and a standard deviation of 1. In other words, they will have similar scale and will help the algorithm remove that bias.
+
+* Another issue found in the model is that the variable `high.wage_ind` is imbalanced which means that the model will have bias towards learning more about values 1 than from values 0. A way to fix this is to apply a "rare events correction to the intercept" [[8]](#references)
+
+
+# References  
+
+*Add any references here. NB You can either do this manually or automatically with a `.bib` file (which then must be submitted along with your `.Rmd` file).  See the RMarkdown [documentation](https://bookdown.org/yihui/rmarkdown-cookbook/bibliography.html) for guidance.*
+
+[1] 	J. Press, “The Japan News,” 13 August 2021. [Online]. Available: https://the-japan-news.com/news/article/0007672187. [Accessed 05 January 2022].
+
+[2] 	FIFA, “FIFA,” 25 February 2021. [Online]. Available: https://www.fifa.com/news/kazuyoshi-miura-i-don-t-think-i-ll-ever-leave-football. [Accessed 06 January 2022].
+
+[3] 	“Transfer Markt,” [Online]. Available: https://www.transfermarkt.com/kyle-hudlin/profil/spieler/829766. [Accessed 06 January 2022].
+
+[4] 	“Colgadosporelfutbol.com,” [Online]. Available: https://colgadosporelfutbol.com/el-peso-ideal-de-un-futbolista-profesional-y-su-importancia/#:~:text=El%20margen%20estimado%20es%20de,por%20cada%202.5%20cent%C3%ADmetros%20adicionales. [Accessed 06 January 2022].
+
+[5] 	S. Glen, “Statistics How to,” [Online]. Available: https://www.statisticshowto.com/logarithmic-distribution/. [Accessed 06 January 2022].
+
+[6] 	K. S. Htoon, “Medium,” 29 February 2020. [Online]. Available: https://medium.com/@kyawsawhtoon/log-transformation-purpose-and-interpretation-9444b4b049c9. [Accessed 06 January 2022].
+
+[7] 	“Statology,” 01 October 2021. [Online]. Available: https://www.statology.org/glm-fit-algorithm-did-not-converge/. [Accessed 06 January 2022].
+
+[8] G. King y L. Zeng, «Logistic Regression in Rare,» Harvard University, Cambridge, MA, , 2001.
